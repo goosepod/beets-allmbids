@@ -104,3 +104,82 @@ def test_mp3_id3v23_input_is_upgraded_without_splitting_literal_separators(audio
     assert result.mgfile.tags.version == (2, 4, 0)
     assert raw_values(result, PRODUCER) == [A, B]
     assert result.title == "Literal / slash; semicolon"
+
+
+@pytest.mark.parametrize('corruption', ['title', 'artwork'])
+def test_unrelated_corruption_aborts_before_backup(audio_file, monkeypatch, corruption):
+    original = audio_file.read_bytes()
+    save = MediaFile.save
+    def corrupt(self, **kwargs):
+        if corruption == 'title':
+            self.title = 'Unexpected change'
+        else:
+            self.images = []
+        save(self, **kwargs)
+    monkeypatch.setattr(MediaFile, 'save', corrupt)
+    with pytest.raises(ValueError, match='Unrelated tags changed|Embedded pictures changed'):
+        enrich(audio_file, {PRODUCER: [A, B]}, write=True)
+    assert audio_file.read_bytes() == original
+    assert not audio_file.with_name(audio_file.name + '.allmbids.bak').exists()
+    assert not list(audio_file.parent.glob('.allmbids-*'))
+
+
+def test_later_beets_write_preserves_all_contributor_lists(audio_file, ffmpeg):
+    from beets.library import Item
+    from beetsplug.allmbids import AllMBIDsPlugin
+    AllMBIDsPlugin()
+    desired = {key: [A, B] for key in MANAGED_TAGS}
+    desired[PERFORMER] = [f'{A} (piano)', f'{B} (role / literal; separator)']
+    enrich(audio_file, desired, write=True)
+    pcm = decoded_pcm(ffmpeg, audio_file)
+    item = Item.from_path(str(audio_file))
+    item.title = 'A later Beets write'
+    item.write()
+    audio = MediaFile(audio_file)
+    for key, values in desired.items():
+        assert read_values(audio, key) == values
+        assert raw_values(audio, key) == values
+    assert decoded_pcm(ffmpeg, audio_file) == pcm
+
+
+def test_configured_id3v23_write_is_blocked_before_file_change(audio_templates, tmp_path):
+    import beets
+    import shutil
+    from beets.library import Item, WriteError
+    from beetsplug.allmbids import AllMBIDsPlugin
+    AllMBIDsPlugin()
+    path = tmp_path / 'enriched.mp3'
+    shutil.copy2(audio_templates['MP3'], path)
+    enrich(path, {PRODUCER: [A, B]}, write=True)
+    original = path.read_bytes()
+    beets.config['id3v23'] = True
+    item = Item.from_path(str(path))
+    item.title = 'Should not be written'
+    with pytest.raises(WriteError, match='set id3v23: false'):
+        item.write()
+    assert path.read_bytes() == original
+    beets.config['id3v23'] = False
+    item.write()
+    assert raw_values(MediaFile(path), PRODUCER) == [A, B]
+
+
+def test_id3v23_guard_allows_unenriched_mp3(audio_templates, tmp_path):
+    import beets
+    import shutil
+    from beets.library import Item
+    from beetsplug.allmbids import AllMBIDsPlugin
+    AllMBIDsPlugin()
+    path = tmp_path / 'unenriched.mp3'
+    shutil.copy2(audio_templates['MP3'], path)
+    beets.config['id3v23'] = True
+    Item.from_path(str(path)).write()
+    assert MediaFile(path).mgfile.tags.version == (2, 3, 0)
+
+
+def test_files_without_artwork_can_be_enriched(audio_file):
+    audio = MediaFile(audio_file)
+    audio.images = []
+    audio.save()
+    enrich(audio_file, {PRODUCER: [A, B]}, write=True)
+    assert read_values(MediaFile(audio_file), PRODUCER) == [A, B]
+    assert not MediaFile(audio_file).images

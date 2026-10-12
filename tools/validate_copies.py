@@ -18,6 +18,32 @@ import zipfile
 FORMATS = ("FLAC", "MP3", "AAC", "ALAC", "Opus")
 
 
+def require(condition, message):
+    """Preservation checks must run even under python -O."""
+    if not condition:
+        raise ValueError(message)
+
+
+def stream_digest(stream):
+    """Bounded-memory hashing compatible with Python 3.10 and pipe streams."""
+    digest = hashlib.sha256()
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(block)
+    return digest.hexdigest()
+
+
+def command_changes(output, expected_items):
+    """Read per-item updates from legacy or current command output."""
+    entries = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+    entries = [entry for entry in entries if entry.get("type", "item") == "item"]
+    require(len(entries) == expected_items, "Command did not return every validation item")
+    require(all(entry.get("status") not in {"skipped", "failed"} for entry in entries),
+            "Command skipped or failed a validation item")
+    changes = {entry["path"]: entry["changes"] for entry in entries}
+    require(len(changes) == expected_items, "Command returned duplicate validation paths")
+    return changes
+
+
 def native_values(audio, key, mp4_prefix):
     if audio.type == "mp3":
         return list(audio.mgfile.tags["TXXX:" + key].text)
@@ -55,22 +81,26 @@ def validate_storage_fixtures(root, args):
             original = hash_file(target)
             before = MediaFile(target)
             preview = enrich(target, desired)
-            assert hash_file(target) == original
+            require(hash_file(target) == original, "Preview changed a fixture")
             updates = enrich(target, desired, write=True)
-            assert preview == updates
+            require(preview == updates, "Preview and write changes differ")
             after = MediaFile(target)
             for key in MANAGED_TAGS:
                 expected = list(dict.fromkeys(read_values(before, key) + desired[key]))
-                assert read_values(after, key) == expected
-                assert native_values(after, key, MP4_PREFIX) == expected
-                assert len(expected) >= 2
-            assert pcm_hash(target) == record["pcm_sha256"]
-            assert _images(after) == _images(before)
-            assert _unrelated_tags(after, updates) == _unrelated_tags(before, updates)
-            assert hash_file(str(target) + ".allmbids.bak") == original
+                require(read_values(after, key) == expected,
+                        f"Contributor list did not round-trip: {key}")
+                require(native_values(after, key, MP4_PREFIX) == expected,
+                        f"Native values did not round-trip: {key}")
+                require(len(expected) >= 2, f"Fixture did not demonstrate multiple values: {key}")
+            require(pcm_hash(target) == record["pcm_sha256"], "Decoded audio changed")
+            require(_images(after) == _images(before), "Artwork changed")
+            require(_unrelated_tags(after, updates) == _unrelated_tags(before, updates),
+                    "Unrelated tags changed")
+            require(hash_file(str(target) + ".allmbids.bak") == original,
+                    "Backup did not match reference")
             written_hash = hash_file(target)
-            assert enrich(target, desired, write=True) == {}
-            assert hash_file(target) == written_hash
+            require(enrich(target, desired, write=True) == {}, "Repeated write was not a no-op")
+            require(hash_file(target) == written_hash, "No-op write changed a fixture")
             checks.append({"format": record["format"], "fixture_path": str(target),
                            "multivalued_fields_verified": len(MANAGED_TAGS),
                            "passed": True, "decoded_audio_unchanged": True,
@@ -103,7 +133,7 @@ def hash_file(path):
     except PermissionError:
         descriptor = os.open(path, os.O_RDONLY)
     with os.fdopen(descriptor, "rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        return stream_digest(stream)
 
 
 def pcm_hash(path):
@@ -111,7 +141,7 @@ def pcm_hash(path):
         "ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-map", "0:a:0",
         "-f", "s32le", "-c:a", "pcm_s32le", "-",
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    digest = hashlib.file_digest(process.stdout, "sha256").hexdigest()
+    digest = stream_digest(process.stdout)
     errors = process.stderr.read().decode("utf-8", "replace")
     if process.wait() != 0:
         raise RuntimeError(f"Audio decode failed for {path}: {errors}")
@@ -201,9 +231,10 @@ def main():
                     shutil.copyfileobj(original, output)
                 shutil.copystat(source, target)
                 shutil.copy2(target, reference)
-                assert hash_file(target) == before == hash_file(reference)
+                require(hash_file(target) == before == hash_file(reference),
+                        "Copied file differs from its source")
                 item = Item.from_path(str(target))
-                assert item.format == format
+                require(item.format == format, "Unexpected copied audio format")
                 item.mb_trackid, item.mb_albumid, item.disc = row["mb_trackid"], row["mb_albumid"], row["disc"]
                 scratch.add(item)
                 selected.append((source, before, stat.st_size, stat.st_mtime_ns))
@@ -235,34 +266,33 @@ def main():
             report["commands"].append({"name": label, "exit_code": result.returncode})
             if result.returncode:
                 raise RuntimeError(f"{label} failed: {result.stderr.strip()}")
-            entries = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
-            if len(entries) != len(FORMATS):
-                raise ValueError(f"{label} did not return all five items")
-            return {entry["path"]: entry["changes"] for entry in entries}
+            return command_changes(result.stdout, len(FORMATS))
 
         preview = command("preview")
         for record in report["tracks"]:
             path = record["copy_path"]
-            assert hash_file(path) == record["source_sha256"], "Preview changed a disposable copy"
+            require(hash_file(path) == record["source_sha256"], "Preview changed a disposable copy")
             record["preview_changes"] = preview[path]
         time.sleep(1.1)
         writes = command("write", write=True)
         for record in report["tracks"]:
             path = record["copy_path"]
-            assert writes[path] == preview[path]
+            require(writes[path] == preview[path], "Preview and write changes differ")
             old_audio, before_pcm = snapshots[path]
             after = MediaFile(path)
-            assert pcm_hash(path) == before_pcm, "Decoded audio changed"
-            assert _images(after) == _images(old_audio), "Artwork changed"
-            assert _unrelated_tags(after, writes[path]) == _unrelated_tags(old_audio, writes[path]), "Unrelated tags changed"
+            require(pcm_hash(path) == before_pcm, "Decoded audio changed")
+            require(_images(after) == _images(old_audio), "Artwork changed")
+            require(_unrelated_tags(after, writes[path]) == _unrelated_tags(old_audio, writes[path]), "Unrelated tags changed")
             raw_lists = {}
             for key, change in writes[path].items():
-                assert read_values(after, key) == change["after"]
+                require(read_values(after, key) == change["after"],
+                        f"Contributor list did not round-trip: {key}")
                 values = native_values(after, key, MP4_PREFIX)
-                assert values == change["after"], "Native values collapsed"
+                require(values == change["after"], "Native values collapsed")
                 raw_lists[key] = values
             if writes[path]:
-                assert hash_file(path + ".allmbids.bak") == record["source_sha256"]
+                require(hash_file(path + ".allmbids.bak") == record["source_sha256"],
+                        "Backup did not match source")
             record.update({"changed_fields": len(writes[path]),
                            "native_values": raw_lists, "pcm_sha256": before_pcm,
                            "decoded_audio_unchanged": True, "artwork_unchanged": True,
@@ -270,7 +300,7 @@ def main():
             print(f"Verified tags, PCM, artwork and backup for {record['format']}", flush=True)
         time.sleep(1.1)
         again = command("preview_after_write")
-        assert all(not updates for updates in again.values()), "Second preview was not a no-op"
+        require(all(not updates for updates in again.values()), "Second preview was not a no-op")
         report["second_preview_noop"] = True
         report["validation_passed"] = True
     except Exception as error:

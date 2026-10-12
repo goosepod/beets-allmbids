@@ -68,7 +68,7 @@ def _stream_info(audio):
 
 
 def _images(audio):
-    return [(image.data, image.desc, image.type, image.mime_type) for image in audio.images]
+    return [(image.data, image.desc, image.type, image.mime_type) for image in (audio.images or [])]
 
 
 def changes(audio, desired):
@@ -88,15 +88,15 @@ def changes(audio, desired):
 
 def enrich(path, desired, *, write=False):
     path = Path(os.fsdecode(path))
+    stat = path.lstat() if write else None
+    if write and (not stat_module.S_ISREG(stat.st_mode) or stat.st_nlink != 1):
+        raise ValueError("Writes require a regular file without symlinks or hardlinks")
     audio = MediaFile(path)
     if audio.type not in SUPPORTED_TYPES:
         raise ValueError(f"Unsupported audio format: {audio.format}")
     updates = changes(audio, desired)
     if not write or not updates:
         return updates
-    stat = path.lstat()
-    if not stat_module.S_ISREG(stat.st_mode) or path.is_symlink() or stat.st_nlink != 1:
-        raise ValueError("Writes require a regular file without symlinks or hardlinks")
     backup = path.with_name(path.name + ".allmbids.bak")
     descriptor, temporary = tempfile.mkstemp(prefix=".allmbids-", suffix=path.suffix, dir=path.parent)
     os.close(descriptor)
@@ -117,7 +117,8 @@ def enrich(path, desired, *, write=False):
         if _images(verified) != _images(audio):
             raise ValueError("Embedded pictures changed")
         current = path.lstat()
-        if (current.st_ino, current.st_size, current.st_mtime_ns) != (stat.st_ino, stat.st_size, stat.st_mtime_ns):
+        if (current.st_ino, current.st_size, current.st_mtime_ns, current.st_ctime_ns) != (
+                stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns):
             raise ValueError("Source changed while preparing tags")
         # Exclusive creation: never replace an earlier backup.
         with backup.open("xb") as output:
@@ -131,6 +132,10 @@ def enrich(path, desired, *, write=False):
                 backup.unlink()
                 raise
         shutil.copystat(path, backup)
+        current = path.lstat()
+        if (current.st_ino, current.st_size, current.st_mtime_ns, current.st_ctime_ns) != (
+                stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns):
+            raise ValueError("Source changed while creating backup; inspect the retained backup")
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):

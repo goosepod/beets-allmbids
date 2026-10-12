@@ -57,6 +57,10 @@ All output keys below have prefix `MUSICBRAINZ_` and suffix `_ID`.
 Engineering relationships include recording and mastering in this MVP. The broad
 ENGINEER key loses that distinction; finer engineering tags can be added later.
 Contributor names are not rewritten or paired positionally with these arrays.
+Lookup results also carry display-only contributor names and attribution to
+release, recording, or work entities. Duplicate tag values remain deduplicated
+while distinct attribution sources are retained. Reports explain only additions,
+without writing names or issuing extra lookups.
 
 Performers have one entry per artist and role, e.g. `uuid (piano)` and
 `uuid (guitar)`. Prefix attributes (additional, guest, minor, solo) appear in
@@ -95,10 +99,35 @@ not a file lock. Interrupted operations can leave a backup or staging file;
 inspect those before retrying. Backup data is flushed; crash durability of the
 replacement and directory entry depends on the filesystem.
 
+Source stat information is captured before the initial metadata read, and
+checked both before and after backup creation. A detected change during backup
+creation aborts replacement and retains the backup for inspection.
+
+The only automatic write listener is a rejection guard: with global
+`id3v23: true`, later Beets writes to MP3s with multiple contributor values
+raise `WriteError` before modification. It never performs enrichment or changes
+configuration. Beets' event does not include per-call `id3v23` overrides, so
+direct API callers and external taggers must retain ID3v2.4 themselves. Normal
+Beets writes preserve these fields in every supported format. Scrub intentionally
+removes custom fields; enrichment belongs after import/scrub.
+
+The command emits consistent JSON Lines item records and a final summary,
+including failures and skips. `--report` creates a new report exclusively before
+query processing and flushes each record. Counts include skipped items and honor
+the limit. A failed lookup prevents that item's write and processing continues.
+
+The client retries transient HTTP errors, broken connections, timeouts and
+truncated bodies at most three times. Validation failures for mismatched IDs
+are not retried or cached. The standalone validator uses explicit checks that
+remain enabled under optimized Python and bounded-memory Python 3.10 hashing.
+
 ## Later work
 
-1. Validate a disposable copy through the user's actual import/scrub/tag tools.
+1. Revalidate when import settings, tag writers or mounts change. The actual
+   server wrapper, configured plugins and NFS mount passed disposable-copy
+   checks; interactive album matching remains outside this validation scope.
 2. Decide whether to expose registered MediaFile fields in the Beets database.
 3. Add optional import enrichment only after validating lifecycle ordering.
 4. Consider a replace policy with provenance and stale-value handling.
-5. Extend beyond the library's five formats and widen Beets version compatibility tests.
+5. Extend beyond the library's five formats if needed. CI now covers the pinned
+   baseline and current allowed dependencies on Linux, Windows and macOS.

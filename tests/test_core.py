@@ -64,3 +64,34 @@ def test_release_recording_work_and_labels():
 def test_invalid_id(value):
     with pytest.raises((ValueError, TypeError)):
         mbid(value)
+
+
+def test_attribution_keeps_each_source_and_names_without_extra_lookups():
+    calls = []
+    producer = relation("producer")
+    producer["artist"]["name"] = "Contributor 東京"
+    entities = {
+        "release": {"id": L, "title": "Release", "relations": [producer],
+                    "label-info": [{"label": {"id": B, "name": "Label"}}]},
+        "recording": {"id": R, "title": "Recording", "relations": [producer,
+            {"type": "performance", "target-type": "work", "work": {"id": W}}]},
+        "work": {"id": W, "title": "Work", "relations": [relation("composer")]},
+    }
+    class Client:
+        def lookup(self, kind, identifier):
+            calls.append((kind, identifier))
+            return entities[kind]
+    tags = collect(Client(), R, L)
+    assert tags["MUSICBRAINZ_PRODUCER_ID"] == [A]
+    details = [d for d in tags.contributors if d["tag"] == "MUSICBRAINZ_PRODUCER_ID"]
+    assert [d["source"]["type"] for d in details] == ["release", "recording"]
+    assert all(d["name"] == "Contributor 東京" and d["mbid"] == A for d in details)
+    assert tags.contributors[-1]["source"] == {"type": "work", "id": W, "title": "Work"}
+    assert tags.contributors[-1]["name"] is None
+    assert calls == [("release", L), ("recording", R), ("work", W)]
+
+
+def test_unknown_relationship_does_not_validate_unused_identifier():
+    tags = {}
+    artist_tags({"relations": [relation("unknown", "unused malformed id")]}, tags)
+    assert tags == {}

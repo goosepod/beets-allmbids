@@ -1,6 +1,7 @@
 import io
 import json
-from urllib.error import HTTPError
+from http.client import IncompleteRead
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -114,3 +115,29 @@ def test_redirect_hop_is_rate_limited():
                                           f"https://musicbrainz.org/ws/2/recording/{W}")
     assert redirected.full_url.endswith(W)
     assert sleeps == [1.1]
+
+
+@pytest.mark.parametrize("error", [IncompleteRead(b"partial"), URLError("offline"),
+                                   TimeoutError("timed out")])
+def test_transport_failures_retry_without_caching_partial_results(error):
+    client, requests, _ = harness([error, {"id": R}])
+    assert client.lookup("recording", R) == {"id": R}
+    client.lookup("recording", R)
+    assert len(requests) == 2
+
+
+def test_truncated_responses_have_bounded_retries():
+    client, requests, _ = harness([IncompleteRead(b"partial") for _ in range(3)])
+    with pytest.raises(IncompleteRead):
+        client.lookup("recording", R)
+    assert len(requests) == 3 and not client.cache
+
+
+def test_truncated_json_body_retries():
+    calls = []
+    def opener(*args, **kwargs):
+        calls.append(True)
+        return io.StringIO('{"id":' if len(calls) == 1 else json.dumps({"id": R}))
+    client = MusicBrainzClient("https://example.org/contact", opener=opener, sleep=lambda delay: None)
+    assert client.lookup("recording", R) == {"id": R}
+    assert len(calls) == 2

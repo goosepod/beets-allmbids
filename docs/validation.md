@@ -43,9 +43,14 @@ is separately checked for a multivalue-preserving upgrade to v2.4.
    steps on the copy, including scrub if applicable, and inspect custom tags.
 
 Disposable-copy validation on the server is now complete; see
-[the server report](server-validation.md). Deployment remains separate follow-up
-work. Full import/scrub lifecycle ordering and writing on the live music mount
-have not been tested.
+[the server report](server-validation.md). Version 0.2.2 was subsequently deployed
+in preview-only mode; see [the installation record](installation.md).
+Automated tests now exercise Beets singleton import with automatic scrub,
+post-import enrichment, and later writes across all five formats. The actual
+server import wrapper, its configured plugins and writes on the target NFS mount
+have now passed the 0.3.0 disposable-copy checks in the current
+[server report](server-validation.md). Interactive album matching was excluded;
+the scratch import retained known IDs using singleton/as-is settings.
 
 ## Completed local checks
 
@@ -56,7 +61,37 @@ have not been tested.
 - Source distribution and universal Python wheel built successfully.
 - Installed the wheel into an isolated local target and confirmed Beets loads
   the packaged plugin and exposes `allmbids --help` with `--write` and `--limit`.
-- GitHub Actions is configured for Windows/Linux and Python 3.10/3.12;
-  those remote jobs have not run yet.
+- The original Windows/Linux CI passed for commit `62cc235`; see
+  [the successful run](https://github.com/goosepod/beets-allmbids/actions/runs/38255458874).
+  The expanded workflow retains Python 3.10/3.12 pinned-baseline jobs, adds macOS,
+  current allowed dependencies on Python 3.14, and installed-wheel checks.
 - Automated HTTP tests use fixtures. Actual MusicBrainz responses and writes to
   disposable server copies have also passed the separate server validation.
+
+## Current regression coverage
+
+For the 0.3.0 checkout, **101 tests passed** locally on macOS in each of:
+
+- Python 3.10.21 with Beets 2.14.1, MediaFile 0.17.0 and Mutagen 1.47.0.
+- Python 3.14.7 with the same pinned dependency baseline.
+- Python 3.14.7 with current allowed dependencies (Beets 2.14.1,
+  MediaFile 0.17.0 and Mutagen 1.48.1).
+
+The source archive and wheel build successfully. Installing the wheel into a
+separate environment and loading it outside the checkout passed with both
+pinned and current dependencies. All eight expanded remote CI jobs passed for
+commit `97b7b9d`; see [the successful run](https://github.com/goosepod/beets-allmbids/actions/runs/38308296626).
+The server installation and rollback state are recorded separately in
+[installation](installation.md).
+
+The suite adds source changes during metadata reads and backup creation,
+partial backup failures, symlink rejection, unrelated tag/artwork corruption,
+files with no artwork, bounded transport/truncated-response retries, mixed
+batch outcomes and exclusive report creation. Validator checks run even under
+`python -O`; hashing is tested without `hashlib.file_digest` for Python 3.10.
+
+Later configured ID3v2.3 writes to MP3s with multiple contributor values are
+blocked before file changes. Keep `id3v23: false` for normal workflows. Explicit
+per-call API overrides and external taggers are outside the Beets write event;
+those callers must also retain ID3v2.4. Scrub removes the fields intentionally,
+so run enrichment afterward and archive an earlier backup before re-enriching.
