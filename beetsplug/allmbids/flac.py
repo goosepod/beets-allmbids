@@ -75,4 +75,3 @@ def enrich(path, desired, *, write=False):
         if os.path.exists(temporary):
             os.unlink(temporary)
     return updates
-

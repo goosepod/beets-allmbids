@@ -89,4 +89,3 @@ def collect(client, recording_id, release_id=None, disc=None):
             artist_tags(client.lookup("work", work_id), tags, disc)
             seen.add(work_id)
     return tags
-

@@ -50,4 +50,3 @@ class MusicBrainzClient:
                 except (ValueError, TypeError):
                     delay = 2 ** (attempt + 1)
                 self.sleep(max(1.1, min(delay, 60)))
-
