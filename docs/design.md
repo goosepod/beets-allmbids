@@ -123,8 +123,9 @@ remain enabled under optimized Python and bounded-memory Python 3.10 hashing.
 
 ## Later work
 
-1. Validate the actual server import wrapper and mount using disposable copies;
-   automated singleton import/scrub and subsequent writes now cover all five formats.
+1. Revalidate when import settings, tag writers or mounts change. The actual
+   server wrapper, configured plugins and NFS mount passed disposable-copy
+   checks; interactive album matching remains outside this validation scope.
 2. Decide whether to expose registered MediaFile fields in the Beets database.
 3. Add optional import enrichment only after validating lifecycle ordering.
 4. Consider a replace policy with provenance and stale-value handling.

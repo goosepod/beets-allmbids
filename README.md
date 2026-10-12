@@ -82,9 +82,8 @@ allmbids:
 id3v23: false
 ```
 
-The recorded 0.2.2 deployment on `entertain` enabled `allmbids` with
-`preview_only: true`. This checkout has not been redeployed there.
-See the [historical installation details](docs/installation.md).
+The personal installation on `entertain` keeps `preview_only: true`.
+See the [installation and rollback record](docs/installation.md).
 
 ## Preview and write
 
@@ -185,6 +184,14 @@ the response cache. Existing recording/release tags are not rewritten.
 
 ## Server validation
 
+Version 0.3.0 passed disposable-copy validation on the actual NFS music mount:
+real lookups, every multivalue field, the `bi` quality/import wrapper with
+isolated Beets state, manual scrub, enrichment, later writes and the ID3v2.3
+guard. All configured plugins loaded. The scratch import used singleton/as-is
+settings to preserve known identities; interactive album matching was excluded.
+Checksums confirmed the live database, configuration and selected source files
+were unchanged. See [the current server report](docs/server-validation.md).
+
 Version 0.2.1 was tested on `entertain` with disposable copies of one actual
 library file per format, an isolated database/configuration and live MusicBrainz
 lookups. All five passed audio, artwork and metadata preservation checks.
@@ -199,8 +206,8 @@ It opens the source database read-only and writes only isolated copies and a
 scratch database. `--storage-fixtures-only` adds deterministic multivalue checks
 to a completed validation workspace. The live Beets installation is not modified.
 The validator supports Python 3.10+; preservation checks also run under `python -O`.
-Its audio checks require FFmpeg on PATH. Historical server validation does not
-replace validation of this version on the target mount and actual import wrapper.
+Its audio checks require FFmpeg on PATH. Revalidate disposable copies when
+changing the mount, import settings or other tag-writing tools.
 
 Licensed under MIT. This is independently implemented and is not an official
 Beets, MusicBrainz or Picard plugin.

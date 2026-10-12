@@ -47,8 +47,10 @@ Disposable-copy validation on the server is now complete; see
 in preview-only mode; see [the installation record](installation.md).
 Automated tests now exercise Beets singleton import with automatic scrub,
 post-import enrichment, and later writes across all five formats. The actual
-server import wrapper, its other plugins, and writes on the target music mount
-still require disposable-copy validation for the current version.
+server import wrapper, its configured plugins and writes on the target NFS mount
+have now passed the 0.3.0 disposable-copy checks in the current
+[server report](server-validation.md). Interactive album matching was excluded;
+the scratch import retained known IDs using singleton/as-is settings.
 
 ## Completed local checks
 
@@ -77,9 +79,10 @@ For the 0.3.0 checkout, **101 tests passed** locally on macOS in each of:
 
 The source archive and wheel build successfully. Installing the wheel into a
 separate environment and loading it outside the checkout passed with both
-pinned and current dependencies. The expanded remote CI matrix has not run
-for these unpushed changes, and the server deployment remains at its recorded
-0.2.2 version.
+pinned and current dependencies. All eight expanded remote CI jobs passed for
+commit `97b7b9d`; see [the successful run](https://github.com/goosepod/beets-allmbids/actions/runs/38308296626).
+The server installation and rollback state are recorded separately in
+[installation](installation.md).
 
 The suite adds source changes during metadata reads and backup creation,
 partial backup failures, symlink rejection, unrelated tag/artwork corruption,

@@ -1,5 +1,44 @@
 # Disposable-copy validation on entertain
 
+## Version 0.3.0: NFS mount and configured workflow
+
+Passed on October 12, 2026 with Beets 2.14.1, Python 3.12.3,
+MediaFile 0.17.0 and Mutagen 1.47.0. The workspace is a sibling of the music
+directory on the same NFSv4 mount:
+
+```text
+/mnt/media/media/.allmbids-validation-0.3.0-vP4gxi/
+```
+
+- Real recording/release/work lookups, preview/write/no-op previews, decoded PCM,
+  artwork, unrelated metadata and exclusive backups passed for all five formats.
+- Additional fixture copies verified every multivalued contributor field in all
+  formats using explicit dummy IDs and literal separator characters.
+- The actual `bi` function exercised its quality gate, continuation prompt,
+  cache cleanup and Beets import. Its directory, database, log, state, plugin
+  path and credential state were redirected to the private workspace. The full
+  configured plugin set loaded successfully. The quality gate flagged a possible
+  transcode, and validation continued only on disposable copies.
+- Scratch import used singleton/as-is settings to retain known identities;
+  interactive album candidate selection was excluded. Move/write behavior and
+  all configured import plugins were exercised.
+- The server has `scrub.auto: false`; import correctly retained the fixture
+  contributor fields. Explicit manual scrub removed them. Enrichment afterward
+  added the real MusicBrainz relationships and produced reports with attribution.
+- Later Beets writes preserved contributor lists, decoded audio and artwork.
+  The final preview was a no-op. A separate dummy-ID MP3 case verified the
+  configured ID3v2.3 guard rejected the write without changing file bytes.
+- Checksums confirmed that the live database, configuration and all selected
+  live source files remained unchanged throughout validation.
+
+The workspace retains `report.json`, `workflow-report.json`, per-command logs,
+reference/copy files, backups, storage fixtures and the exact workflow harness.
+Harness attempts are retained separately. Reports, copied credentials and
+library paths stay outside Git in the private workspace. Files containing
+dummy IDs must remain outside the music library.
+
+## Historical version 0.2.1 validation
+
 **Passed with plugin version 0.2.1**, using the existing Beets 2.14.1,
 Python 3.12.3, MediaFile 0.17.0 and Mutagen 1.47.0 environment.
 The plugin was loaded from an isolated directory; no packages were installed
@@ -73,4 +112,5 @@ It contains `copies/`, `references/`, `storage-fixtures/`, per-command logs,
 backups, the isolated plugin/config/database and `report.json` with full
 checksums and tag arrays. Raw reports include private library paths and are
 kept outside the Git project. This verifies the manual command on disposable
-server files; full import/scrub ordering and live-mount writes remain untested.
+server files. At that time, import/scrub ordering and live-mount writes were
+untested; the 0.3.0 validation above adds those disposable-copy checks.
