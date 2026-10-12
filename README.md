@@ -16,8 +16,10 @@ does not guess identities from contributor names.
 - Previews by default. The `preview_only` lock rejects `--write` until explicitly disabled.
 - Merges with existing values, preserves other tags and artwork, verifies staged
   tags, and creates an exclusive `original-filename.allmbids.bak` backup.
+- Reports contributor names and source entities alongside proposed additions.
+- Blocks configured Beets ID3v2.3 writes that would collapse contributor lists.
 
-This initial version has no automatic import hooks and no database enrichment.
+Enrichment is manual, with no automatic import enrichment or database enrichment.
 It supports every format found in the inspected library: FLAC, MP3, AAC in M4A,
 ALAC in M4A, and Opus. It does not change names, core artist IDs, `COMPOSER`,
 `PERFORMER`, or Beets' own `MUSICBRAINZ_COMPOSERID` spelling.
@@ -43,6 +45,11 @@ The lookup code has no dependency on audio codecs or containers.
 MP3 writes use MediaFile's default ID3v2.4 output, including for existing
 ID3v2.3 files, to retain separate text values. Old values containing a literal
 slash or semicolon are preserved as single values, never split by guessing.
+Keep Beets' global `id3v23: false` for subsequent tag writes. While `allmbids`
+is loaded, its `write` event guard rejects configured ID3v2.3 writes to MP3s
+with multiple contributor values before modifying the file. Beets does not
+pass explicit `Item.write(id3v23=True)` overrides to that event: code using
+that API, direct MediaFile writes, and external taggers must retain ID3v2.4.
 AAC here means the M4A container actually present in the library; raw ADTS
 `.aac` streams are outside MediaFile's supported tagging interface.
 
@@ -72,11 +79,12 @@ Add a contact address or URL for the MusicBrainz User-Agent:
 allmbids:
   contact: 'mailto:your-address@example.com'  # replace with your actual contact
   preview_only: true
+id3v23: false
 ```
 
-The personal installation on `entertain` now enables `allmbids` with
-`preview_only: true`. It has no automatic import hooks; `--write` is blocked.
-See [installation details](docs/installation.md).
+The recorded 0.2.2 deployment on `entertain` enabled `allmbids` with
+`preview_only: true`. This checkout has not been redeployed there.
+See the [historical installation details](docs/installation.md).
 
 ## Preview and write
 
@@ -92,6 +100,26 @@ items, **including skipped items**; `--limit 0` explicitly removes the limit.
 Formats outside this supported set and recordings without MBIDs are skipped. Failed lookups prevent
 writing that item; processing continues and the command exits with an error.
 An empty changes object means no additions were found.
+
+Output is JSON Lines: one `type: "item"` record per processed item, followed by
+a `type: "summary"` record with counts and total processed. Item statuses are
+`changed`, `unchanged`, `skipped`, or `failed`; in preview mode `changed` means
+additions are proposed. All item records have `changes`, `contributors`,
+`reason`, and `error` fields. Each contributor entry identifies the tag/value,
+MBID, name (or null), relationship, and source entity type/ID/title. Only newly
+added values are explained; multiple sources for the same addition are retained.
+Names come from the same responses and cause no extra requests or tag changes.
+
+Save the same records with `--report`; an existing report is never overwritten,
+and an uncreatable report stops the command before accessing query items:
+
+```sh
+beet allmbids --limit 5 --report preview.jsonl 'artist:Bill Withers'
+```
+
+Failed batches still include the final summary and exit nonzero. Report records
+are flushed after each item; an interruption may leave a partial report. If
+report writing fails during a write batch, earlier file updates remain applied.
 
 First validate on a disposable file copy and a separate scratch Beets database.
 Do not point that database at your live library. See [validation](docs/validation.md).
@@ -130,11 +158,16 @@ python -m venv .venv
 python -m pip install -e '.[test]'
 python -m pytest -q
 python -m build
+python tools/check_wheel.py dist
 ```
 
 Tests use generated audio in all five formats, temporary databases and fake HTTP responses;
 they do not access your music library or make MusicBrainz requests.
-GitHub Actions runs the tests and builds on Windows and Linux.
+GitHub Actions tests Windows, Linux and macOS, retaining the pinned dependency
+baseline on Python 3.10/3.12 and testing current allowed dependencies on Python
+3.14. It also installs the built wheel into a separate environment and loads
+the plugin outside the source checkout. Tests cover real Beets singleton
+import with automatic scrub, enrichment after import, and later Beets writes.
 FFmpeg generates and independently decodes fixtures. The test extra includes
 `imageio-ffmpeg` with a bundled executable for systems without FFmpeg on PATH;
 FFmpeg is not a runtime requirement for the plugin.
@@ -165,6 +198,9 @@ and music-root paths, a live-config path for checksum verification, and a contac
 It opens the source database read-only and writes only isolated copies and a
 scratch database. `--storage-fixtures-only` adds deterministic multivalue checks
 to a completed validation workspace. The live Beets installation is not modified.
+The validator supports Python 3.10+; preservation checks also run under `python -O`.
+Its audio checks require FFmpeg on PATH. Historical server validation does not
+replace validation of this version on the target mount and actual import wrapper.
 
 Licensed under MIT. This is independently implemented and is not an official
 Beets, MusicBrainz or Picard plugin.

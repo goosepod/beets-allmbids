@@ -1,7 +1,8 @@
 """Read-only MusicBrainz client with bounded retries and per-run caching."""
 import json
 import time
-from urllib.error import HTTPError
+from http.client import HTTPException
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 
@@ -83,3 +84,10 @@ class MusicBrainzClient:
                 except (ValueError, TypeError):
                     delay = 2 ** (attempt + 1)
                 self.sleep(max(1.1, min(delay, 60)))
+            except (HTTPException, URLError, TimeoutError, ConnectionError,
+                    json.JSONDecodeError, UnicodeDecodeError):
+                # Broken connections and truncated bodies are safe to retry:
+                # lookups are read-only and no partial response is cached.
+                if attempt == 2:
+                    raise
+                self.sleep(2 ** (attempt + 1))

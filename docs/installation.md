@@ -1,6 +1,7 @@
 # Preview-only installation on entertain
 
-Version **0.2.2** is installed in the existing pipx-managed Beets environment.
+This is the historical deployment record for **0.2.2** in the pipx-managed Beets
+environment. Repository changes made afterward have not been deployed by this review.
 The validated tag writer is unchanged from 0.2.1; this release adds a configuration
 lock that rejects write requests before accessing query items. **51 local tests passed.**
 
@@ -50,5 +51,6 @@ The exact pre-install configuration backup and installation logs/report are unde
 $HOME/.local/share/beets-allmbids/install-2e6bz1is/
 ```
 
-The local source Git repository was moved, with its history, to
-`C:\Users\ursasmar\Projects\beets-allmbids`. It has not been published remotely.
+The repository is published at https://github.com/goosepod/beets-allmbids.
+Local checkout locations vary by machine; the earlier Windows path is no longer
+a deployment requirement.

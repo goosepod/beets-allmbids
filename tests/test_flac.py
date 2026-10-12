@@ -88,3 +88,74 @@ def test_hardlink_write_rejected(flac_file):
     with pytest.raises(ValueError):
         enrich(flac_file, {TAG: [A]}, write=True)
     assert flac_file.read_bytes() == original == sibling.read_bytes()
+
+
+def test_symlink_write_rejected(flac_file):
+    link = flac_file.with_name('linked.flac')
+    try:
+        link.symlink_to(flac_file)
+    except OSError:
+        pytest.skip('Symlinks are not available on this filesystem')
+    original = flac_file.read_bytes()
+    with pytest.raises(ValueError, match='without symlinks'):
+        enrich(link, {TAG: [A]}, write=True)
+    assert flac_file.read_bytes() == original
+    assert not list(flac_file.parent.glob('*.allmbids.bak'))
+
+
+def test_failed_backup_copy_removes_partial_backup(flac_file, monkeypatch):
+    original = flac_file.read_bytes()
+    def fail(source, output):
+        output.write(b'partial backup')
+        raise OSError('backup disk error')
+    monkeypatch.setattr('beetsplug.allmbids.tags.shutil.copyfileobj', fail)
+    with pytest.raises(OSError, match='backup disk error'):
+        enrich(flac_file, {TAG: [A]}, write=True)
+    assert flac_file.read_bytes() == original
+    assert not flac_file.with_name(flac_file.name + '.allmbids.bak').exists()
+    assert not list(flac_file.parent.glob('.allmbids-*'))
+
+
+def test_source_change_during_initial_read_aborts(flac_file, monkeypatch):
+    import beetsplug.allmbids.tags as tags
+    original = flac_file.read_bytes()
+    def changed_read(path):
+        audio = MediaFile(path)
+        if path == flac_file:
+            flac_file.write_bytes(original + b'concurrent edit')
+        return audio
+    monkeypatch.setattr(tags, 'MediaFile', changed_read)
+    with pytest.raises(ValueError, match='Source changed'):
+        enrich(flac_file, {TAG: [A]}, write=True)
+    assert flac_file.read_bytes() == original + b'concurrent edit'
+    assert not flac_file.with_name(flac_file.name + '.allmbids.bak').exists()
+    assert not list(flac_file.parent.glob('.allmbids-*'))
+
+
+def test_source_change_during_backup_aborts_replacement(flac_file, monkeypatch):
+    import shutil
+    original = flac_file.read_bytes()
+    copy = shutil.copyfileobj
+    def concurrent_copy(source, output):
+        copy(source, output)
+        flac_file.write_bytes(original + b'concurrent edit')
+    monkeypatch.setattr('beetsplug.allmbids.tags.shutil.copyfileobj', concurrent_copy)
+    with pytest.raises(ValueError, match='Source changed while creating backup'):
+        enrich(flac_file, {TAG: [A]}, write=True)
+    assert flac_file.read_bytes() == original + b'concurrent edit'
+    assert flac_file.with_name(flac_file.name + '.allmbids.bak').read_bytes() == original
+    assert not list(flac_file.parent.glob('.allmbids-*'))
+
+
+def test_source_change_during_staged_save_aborts(flac_file, monkeypatch):
+    original = flac_file.read_bytes()
+    save = MediaFile.save
+    def concurrent_save(self, **kwargs):
+        save(self, **kwargs)
+        flac_file.write_bytes(original + b'concurrent edit')
+    monkeypatch.setattr(MediaFile, 'save', concurrent_save)
+    with pytest.raises(ValueError, match='Source changed while preparing tags'):
+        enrich(flac_file, {TAG: [A]}, write=True)
+    assert flac_file.read_bytes() == original + b'concurrent edit'
+    assert not flac_file.with_name(flac_file.name + '.allmbids.bak').exists()
+    assert not list(flac_file.parent.glob('.allmbids-*'))
