@@ -13,7 +13,7 @@ Read-only inspection of `entertain` found:
 - Enabled plugins include musicbrainz, mbsync, scrub and several metadata writers.
 
 These details are environment observations, not required defaults. No server
-configuration, packages, music files or database records were changed.
+live configuration, installed packages, live music files or live database records were changed.
 
 Automated validation includes fake MusicBrainz requests, relationships from
 release/recording/work, stable deduplication, multiple roles, medium filtering,
@@ -42,12 +42,15 @@ is separately checked for a multivalue-preserving upgrade to v2.4.
 6. Repeat for each format. Preview again: no changes should be needed. Test any normal Beets tag-writing
    steps on the copy, including scrub if applicable, and inspect custom tags.
 
-Deployment and live-library validation remain separate follow-up work. No
-claim is made yet about a full import lifecycle or network-mount replacement.
+Disposable-copy validation on the server is now complete; see
+[the server report](server-validation.md). Deployment remains separate follow-up
+work. Full import/scrub lifecycle ordering and writing on the live music mount
+have not been tested.
 
 ## Completed local checks
 
-- **44 tests passed** for version 0.2.0, covering all five library formats,
+- **50 tests passed** for version 0.2.1, covering all five library formats
+  and canonical MusicBrainz merge redirects,
   on Windows with Python 3.12.14, Beets 2.14.1,
   MediaFile 0.17.0 and Mutagen 1.47.0. All files and databases were temporary.
 - Source distribution and universal Python wheel built successfully.
@@ -55,5 +58,5 @@ claim is made yet about a full import lifecycle or network-mount replacement.
   the packaged plugin and exposes `allmbids --help` with `--write` and `--limit`.
 - GitHub Actions is configured for Windows/Linux and Python 3.10/3.12;
   those remote jobs have not run yet.
-- HTTP tests use fixtures; live MusicBrainz responses and server file writes
-  remain unvalidated.
+- Automated HTTP tests use fixtures. Actual MusicBrainz responses and writes to
+  disposable server copies have also passed the separate server validation.

@@ -28,6 +28,12 @@ credit enrichment is included. Work `instrumental` attributes do not suppress
 lyricist IDs: this plugin records work contributors, not lyrics in the performance.
 Relationships with `medium N` attributes only apply to the item's matching disc.
 
+[Merged MusicBrainz IDs](https://musicbrainz.org/doc/MusicBrainz_Identifier)
+redirect to their current entity. The client accepts a changed response ID only
+when it matches the final HTTPS lookup URL for the same entity type on
+`musicbrainz.org`. Redirect hops obey the rate limit. Both the requested and
+canonical IDs are cached without updating core IDs in files or the database.
+
 ## Tag mapping
 
 All output keys below have prefix `MUSICBRAINZ_` and suffix `_ID`.

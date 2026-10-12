@@ -141,5 +141,25 @@ concurrently against the public service. Metadata quality depends on the
 relationships available in MusicBrainz; merge mode deliberately retains stale
 IDs rather than removing user data.
 
+Merged MusicBrainz IDs are supported: redirects to the same entity type on
+MusicBrainz are validated and rate limited, and both old and current IDs share
+the response cache. Existing recording/release tags are not rewritten.
+
+## Server validation
+
+Version 0.2.1 was tested on `entertain` with disposable copies of one actual
+library file per format, an isolated database/configuration and live MusicBrainz
+lookups. All five passed audio, artwork and metadata preservation checks.
+Separate fixture copies verified every multivalued contributor field using
+clearly marked dummy IDs. The selected Opus recording had no contributor data,
+so the real lookup correctly made no changes. See [the server report](docs/server-validation.md).
+
+The repeatable validator is [tools/validate_copies.py](tools/validate_copies.py).
+It requires an existing fresh workspace, a plugin wheel, explicit live-library
+and music-root paths, a live-config path for checksum verification, and a contact.
+It opens the source database read-only and writes only isolated copies and a
+scratch database. `--storage-fixtures-only` adds deterministic multivalue checks
+to a completed validation workspace. The live Beets installation is not modified.
+
 Licensed under MIT. This is independently implemented and is not an official
 Beets, MusicBrainz or Picard plugin.

@@ -5,7 +5,9 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from beetsplug.allmbids.client import MusicBrainzClient
+from beetsplug.allmbids.client import MusicBrainzClient, _RateLimitedRedirectHandler
+from beetsplug.allmbids._version import __version__
+from urllib.request import Request
 from test_core import R, W
 
 
@@ -33,7 +35,7 @@ def test_cache_includes_user_agent_and_rate_limit():
     assert requests[1][2] - requests[0][2] >= 1
     request, timeout, _ = requests[0]
     assert parse_qs(urlparse(request.full_url).query)["inc"] == ["artist-rels+work-rels"]
-    assert "beets-allmbids/0.2.0" in request.get_header("User-agent")
+    assert f"beets-allmbids/{__version__}" in request.get_header("User-agent")
     assert timeout == 30
 
 
@@ -70,3 +72,45 @@ def test_retries_are_bounded():
     with pytest.raises(HTTPError):
         client.lookup("recording", R)
     assert len(requests) == 3
+
+
+def test_merged_mbid_redirect_and_canonical_id_are_cached():
+    class Response(io.StringIO):
+        def geturl(self):
+            return f"https://musicbrainz.org/ws/2/recording/{W}?fmt=json"
+    calls = []
+    def opener(request, timeout):
+        calls.append(request)
+        return Response(json.dumps({"id": W}))
+    client = MusicBrainzClient("https://example.org/contact", opener=opener)
+    assert client.lookup("recording", R) == {"id": W}
+    assert client.lookup("recording", W) == {"id": W}
+    assert client.lookup("recording", R) == {"id": W}
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("destination", [
+    f"https://other.example/ws/2/recording/{W}",
+    f"http://musicbrainz.org/ws/2/recording/{W}",
+    f"https://musicbrainz.org/ws/2/work/{W}",
+    "https://musicbrainz.org/doc/Recording",
+])
+def test_unexpected_redirect_endpoint_rejected(destination):
+    class Response(io.StringIO):
+        def geturl(self):
+            return destination
+    client = MusicBrainzClient("https://example.org/contact",
+                              opener=lambda *args, **kwargs: Response(json.dumps({"id": W})))
+    with pytest.raises(ValueError):
+        client.lookup("recording", R)
+
+
+def test_redirect_hop_is_rate_limited():
+    client, _, sleeps = harness([])
+    client._pace()
+    handler = _RateLimitedRedirectHandler(client._pace)
+    request = Request(f"https://musicbrainz.org/ws/2/recording/{R}")
+    redirected = handler.redirect_request(request, None, 301, "Merged", {},
+                                          f"https://musicbrainz.org/ws/2/recording/{W}")
+    assert redirected.full_url.endswith(W)
+    assert sleeps == [1.1]
