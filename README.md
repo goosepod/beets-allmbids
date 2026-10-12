@@ -13,7 +13,7 @@ does not guess identities from contributor names.
   remixer, conductor, DJ mixer and performer. See [design](docs/design.md).
 - Uses Beets' MediaFile layer for custom `MUSICBRAINZ_<ROLE>_ID` fields,
   storing lists of separate values rather than joined strings.
-- Previews by default. `--write` explicitly enables file writes.
+- Previews by default. The `preview_only` lock rejects `--write` until explicitly disabled.
 - Merges with existing values, preserves other tags and artwork, verifies staged
   tags, and creates an exclusive `original-filename.allmbids.bak` backup.
 
@@ -71,9 +71,12 @@ Add a contact address or URL for the MusicBrainz User-Agent:
 ```yaml
 allmbids:
   contact: 'mailto:your-address@example.com'  # replace with your actual contact
+  preview_only: true
 ```
 
-No installation or configuration change has been made on the live server.
+The personal installation on `entertain` now enables `allmbids` with
+`preview_only: true`. It has no automatic import hooks; `--write` is blocked.
+See [installation details](docs/installation.md).
 
 ## Preview and write
 
@@ -92,7 +95,9 @@ An empty changes object means no additions were found.
 
 First validate on a disposable file copy and a separate scratch Beets database.
 Do not point that database at your live library. See [validation](docs/validation.md).
-After reviewing a preview for a validated target, write explicitly:
+After reviewing a preview for a validated target, set
+`allmbids.preview_only: false` in your configuration before using `--write`.
+Leave it `true` for a preview-only installation.
 
 ```sh
 beet allmbids --write --limit 1 id:123

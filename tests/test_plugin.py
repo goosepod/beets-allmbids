@@ -19,6 +19,7 @@ def test_actual_beets_library_command(audio_file, tmp_path, monkeypatch, capsys)
     library.add(item)
     plugin = AllMBIDsPlugin()
     plugin.config["contact"] = "https://example.org/contact"
+    plugin.config["preview_only"] = False
     calls = []
     def collect(client, recording, release, disc):
         calls.append(recording)
@@ -57,6 +58,7 @@ def test_lookup_error_never_writes(flac_file, tmp_path, monkeypatch):
     library.add(item)
     plugin = AllMBIDsPlugin()
     plugin.config["contact"] = "https://example.org/contact"
+    plugin.config["preview_only"] = False
     def fail(*args):
         raise OSError("network unavailable")
     monkeypatch.setattr("beetsplug.allmbids.collect", fail)
@@ -66,3 +68,9 @@ def test_lookup_error_never_writes(flac_file, tmp_path, monkeypatch):
     assert flac_file.read_bytes() == original
     assert not flac_file.with_name(flac_file.name + ".allmbids.bak").exists()
     library._close()
+
+
+def test_preview_only_blocks_write_before_library_access():
+    plugin = AllMBIDsPlugin()
+    with pytest.raises(ui.UserError, match="preview-only"):
+        plugin.run(None, SimpleNamespace(write=True, limit=1), ["id:1"])

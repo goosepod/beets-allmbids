@@ -169,7 +169,7 @@ def main():
         "directory": str(copies), "library": str(scratch_db),
         "plugins": ["allmbids"], "pluginpath": [str(plugin)],
         "import": {"copy": False, "move": False, "write": False, "autotag": False},
-        "allmbids": {"contact": args.contact},
+        "allmbids": {"contact": args.contact, "preview_only": False},
     }), encoding="utf-8")
     before_database, before_config = hash_file(library_path), hash_file(config_path)
     report = {"workspace": str(root), "version": __version__, "tracks": [], "commands": []}

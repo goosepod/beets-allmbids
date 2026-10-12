@@ -16,7 +16,7 @@ from .tags import enrich
 class AllMBIDsPlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
-        self.config.add({"contact": ""})
+        self.config.add({"contact": "", "preview_only": True})
 
     def commands(self):
         command = ui.Subcommand("allmbids", help="preview contributor MBIDs for selected audio files")
@@ -28,6 +28,8 @@ class AllMBIDsPlugin(BeetsPlugin):
         return [command]
 
     def run(self, lib, opts, args):
+        if opts.write and self.config["preview_only"].get(bool):
+            raise ui.UserError("allmbids is preview-only; --write is disabled by allmbids.preview_only")
         if not args:
             raise ui.UserError("Provide a beets query, e.g. allmbids --limit 1 id:123")
         if opts.limit < 0:
