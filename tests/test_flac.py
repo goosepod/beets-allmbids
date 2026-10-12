@@ -3,7 +3,8 @@ import pytest
 import soundfile as sf
 from mutagen.flac import FLAC
 
-from beetsplug.allmbids.flac import enrich
+from beetsplug.allmbids.tags import enrich
+from mediafile import MediaFile
 from test_core import A, B
 
 TAG = "MUSICBRAINZ_PRODUCER_ID"
@@ -52,7 +53,7 @@ def test_failed_save_leaves_original_untouched(flac_file, monkeypatch):
     original = flac_file.read_bytes()
     def fail(*args, **kwargs):
         raise OSError("test disk error")
-    monkeypatch.setattr(FLAC, "save", fail)
+    monkeypatch.setattr(MediaFile, "save", fail)
     with pytest.raises(OSError):
         enrich(flac_file, {TAG: [A]}, write=True)
     assert flac_file.read_bytes() == original
@@ -68,7 +69,7 @@ def test_replace_failure_preserves_original_and_backup(flac_file, monkeypatch):
     original = flac_file.read_bytes()
     def fail(*args):
         raise OSError("test replace error")
-    monkeypatch.setattr("beetsplug.allmbids.flac.os.replace", fail)
+    monkeypatch.setattr("beetsplug.allmbids.tags.os.replace", fail)
     with pytest.raises(OSError):
         enrich(flac_file, {TAG: [A]}, write=True)
     assert flac_file.read_bytes() == original

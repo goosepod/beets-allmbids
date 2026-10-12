@@ -5,15 +5,16 @@ import sys
 import pytest
 from beets import ui
 from beets.library import Item, Library
-from mutagen.flac import FLAC
+from mediafile import MediaFile
 
 from beetsplug.allmbids import AllMBIDsPlugin
+from beetsplug.allmbids.tags import read_values
 from test_core import A, R
 
 
-def test_actual_beets_library_command(flac_file, tmp_path, monkeypatch, capsys):
+def test_actual_beets_library_command(audio_file, tmp_path, monkeypatch, capsys):
     library = Library(str(tmp_path / "test.db"))
-    item = Item.from_path(str(flac_file))
+    item = Item.from_path(str(audio_file))
     item.mb_trackid = R
     library.add(item)
     plugin = AllMBIDsPlugin()
@@ -23,14 +24,14 @@ def test_actual_beets_library_command(flac_file, tmp_path, monkeypatch, capsys):
         calls.append(recording)
         return {"MUSICBRAINZ_PRODUCER_ID": [A]}
     monkeypatch.setattr("beetsplug.allmbids.collect", collect)
-    original = flac_file.read_bytes()
+    original = audio_file.read_bytes()
     opts = SimpleNamespace(write=False, limit=1)
     plugin.run(library, opts, [f"id:{item.id}"])
     assert '"mode": "preview"' in capsys.readouterr().out
-    assert flac_file.read_bytes() == original
+    assert audio_file.read_bytes() == original
     opts.write = True
     plugin.run(library, opts, [f"id:{item.id}"])
-    assert FLAC(flac_file)["MUSICBRAINZ_PRODUCER_ID"] == [A]
+    assert read_values(MediaFile(audio_file), "MUSICBRAINZ_PRODUCER_ID") == [A]
     assert calls == [R, R]
     library._close()
 

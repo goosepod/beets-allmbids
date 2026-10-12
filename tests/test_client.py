@@ -33,7 +33,7 @@ def test_cache_includes_user_agent_and_rate_limit():
     assert requests[1][2] - requests[0][2] >= 1
     request, timeout, _ = requests[0]
     assert parse_qs(urlparse(request.full_url).query)["inc"] == ["artist-rels+work-rels"]
-    assert "beets-allmbids/0.1.0" in request.get_header("User-agent")
+    assert "beets-allmbids/0.2.0" in request.get_header("User-agent")
     assert timeout == 30
 
 

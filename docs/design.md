@@ -6,7 +6,9 @@ The starting point is the [Picard plugin's documented tag convention](https://gi
 `musicbrainz_role_id`, with separate `mbid (role)` performer values.
 Implementation follows the [MusicBrainz JSON API](https://musicbrainz.org/doc/MusicBrainz_API)
 and [Beets plugin namespace and command interface](https://beets.readthedocs.io/en/stable/dev/plugins/index.html).
-FLAC access uses [Mutagen's FLAC interface](https://mutagen.readthedocs.io/en/latest/api/flac.html).
+Tag access uses [MediaFile](https://github.com/beetbox/mediafile) and its
+`ListMediaField`, `ListStorageStyle`, `MP3ListDescStorageStyle` and
+`MP4ListStorageStyle` interfaces.
 No Picard source code is vendored.
 
 ## Retrieval
@@ -65,11 +67,23 @@ fields, database changes or importer hooks. JSON command output preserves arrays
 for review. Standard COMPOSERID spelling and the plugin's COMPOSER_ID remain
 separate to avoid overwriting established Beets fields.
 
+Registered MediaFile descriptors provide one list interface across FLAC, MP3,
+AAC/M4A, ALAC/M4A and Opus. Internal field names have an `allmbids_` prefix and
+do not add Item database fields. FLAC/Opus use repeated Vorbis comments, MP3
+uses multivalued ID3v2.4 TXXX frames, and AAC/ALAC use multivalued UTF-8 MP4
+freeform atoms under the `com.apple.iTunes` namespace. Existing FLAC tag names
+are preserved. MP3 writes upgrade v2.3 tags to v2.4; separator characters in
+existing values are never interpreted as a serialization format.
+
 For each file: read, plan, copy into a sibling temporary file, write, reload and
-verify requested tags plus unrelated comments, embedded pictures and the FLAC
-stream MD5 header. Check source identity/size/mtime, create an exclusive backup,
-then replace the source atomically. Runtime stream identity checks are metadata
-checks, not a full PCM decode. Tests independently decode and compare PCM.
+verify requested tags, unrelated tag contents, embedded pictures and stream
+properties (including the MD5 header for FLAC). Native tag structures are
+inspected only for preservation verification; contributor tag access and saving
+use MediaFile. ID3 text encoding changes are allowed while field contents must
+remain equal. Check source identity/size/mtime, create an exclusive backup,
+then replace the source atomically. Runtime stream checks examine metadata,
+not a full PCM decode. Tests independently decode and compare PCM with FFmpeg
+for each format and additionally inspect native tag lists after saving.
 Concurrent mutation is unsupported: the stat check is best-effort detection,
 not a file lock. Interrupted operations can leave a backup or staging file;
 inspect those before retrying. Backup data is flushed; crash durability of the
@@ -78,7 +92,7 @@ replacement and directory entry depends on the filesystem.
 ## Later work
 
 1. Validate a disposable copy through the user's actual import/scrub/tag tools.
-2. Decide whether to register fields with MediaFile for persistent Beets integration.
+2. Decide whether to expose registered MediaFile fields in the Beets database.
 3. Add optional import enrichment only after validating lifecycle ordering.
 4. Consider a replace policy with provenance and stale-value handling.
-5. Add other formats and wider Beets version compatibility tests.
+5. Extend beyond the library's five formats and widen Beets version compatibility tests.

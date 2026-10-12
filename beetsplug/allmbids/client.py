@@ -18,7 +18,7 @@ class MusicBrainzClient:
     def __init__(self, contact, *, opener=urlopen, clock=time.monotonic, sleep=time.sleep):
         if not contact.strip() or "\n" in contact or "\r" in contact:
             raise ValueError("Set allmbids.contact to your email or a contact URL")
-        self.user_agent = f"beets-allmbids/0.1.0 ({contact})"
+        self.user_agent = f"beets-allmbids/0.2.0 ({contact})"
         self.opener, self.clock, self.sleep = opener, clock, sleep
         self.cache = {}
         self.last_request = None

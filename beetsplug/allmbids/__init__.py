@@ -6,10 +6,11 @@ from beets import ui
 from beets.plugins import BeetsPlugin
 from beets.util import syspath
 from mutagen import MutagenError
+from mediafile import UnreadableFileError
 
 from .client import MusicBrainzClient
 from .core import collect
-from .flac import enrich
+from .tags import enrich
 
 
 class AllMBIDsPlugin(BeetsPlugin):
@@ -18,9 +19,9 @@ class AllMBIDsPlugin(BeetsPlugin):
         self.config.add({"contact": ""})
 
     def commands(self):
-        command = ui.Subcommand("allmbids", help="preview contributor MBIDs for selected FLACs")
+        command = ui.Subcommand("allmbids", help="preview contributor MBIDs for selected audio files")
         command.parser.add_option("--write", action="store_true", default=False,
-                                  help="merge tags into FLAC files, making exclusive backups")
+                                  help="merge tags into audio files, making exclusive backups")
         command.parser.add_option("--limit", type="int", default=10,
                                   help="maximum matching items (default 10; 0 means unlimited)")
         command.func = self.run
@@ -37,8 +38,8 @@ class AllMBIDsPlugin(BeetsPlugin):
             if opts.limit and number >= opts.limit:
                 break
             path = syspath(item.path)
-            if item.format != "FLAC":
-                ui.print_(f"skip (not FLAC): {path}")
+            if item.format not in {"FLAC", "MP3", "AAC", "ALAC", "Opus"}:
+                ui.print_(f"skip (unsupported format {item.format}): {path}")
                 continue
             if not item.mb_trackid:
                 ui.print_(f"skip (missing recording MBID): {path}")
@@ -50,7 +51,7 @@ class AllMBIDsPlugin(BeetsPlugin):
                 updates = enrich(item.path, tags, write=opts.write)
                 ui.print_(json.dumps({"path": path, "mode": "write" if opts.write else "preview",
                                       "changes": updates}, ensure_ascii=False))
-            except (OSError, ValueError, URLError, MutagenError) as error:
+            except (OSError, ValueError, URLError, MutagenError, UnreadableFileError) as error:
                 failures += 1
                 self._log.error("{}: {}", path, error)
         if failures:
